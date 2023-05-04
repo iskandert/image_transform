@@ -64,9 +64,21 @@
             <input type="number" id="shadow" min="1" :max="maxShadow" v-model="shadow" />
           </div>
         </div>
-        <button class="save_button" @click="saveSVG">
-          Скачать SVG
-        </button>
+        <div class="form-item">
+          <label for="shadow">Отслеживать настройки в live-режиме</label>
+          <div class="input_container">
+            <input type="checkbox" v-model="isLive" />
+            <span>{{ isLive ? 'включено' : 'отключено' }}</span>
+          </div>
+        </div>
+        <div class="btn_container">
+          <button class="save_button" @click="saveSVG">
+            Скачать SVG
+          </button>
+          <button class="calc_button" @click="setSVG">
+            Рассчитать SVG
+          </button>
+        </div>
       </div>
     </div>
     <div class="images">
@@ -108,7 +120,8 @@ export default {
       imageHeight: null,
       symbols: [],
       context: null,
-      canCalculate: false
+      canCalculate: false,
+      isLive: true
     }
   },
   computed: {
@@ -187,7 +200,8 @@ export default {
         this.context.drawImage(img, 0, 0)
       };
       img.src = URL.createObjectURL(file)
-      this.setSvg()
+      if (!this.isLive) return
+      this.setSVG()
     },
     saveSVG() {
       const svg = this.$refs.svg
@@ -201,7 +215,7 @@ export default {
       downloadLink.click()
       document.body.removeChild(downloadLink)
     },
-    async setSvg() {
+    async setSVG() {
       this.canCalculate = false
       let a = new Date()
       let symbols = []
@@ -280,12 +294,12 @@ export default {
     },
     settings: {
       async handler(nv) {
-        if (this.canCalculate) this.setSvg()
+        if (this.canCalculate && this.isLive) this.setSVG()
       },
       deep: true
     },
     async canCalculate(nv) {
-      if (nv) this.setSvg()
+      if (nv && this.isLive) this.setSVG()
     }
   },
   mounted() {
@@ -338,7 +352,7 @@ canvas {
 
 .divider>span {
   display: inline-block;
-  margin: 12px -5px;
+  margin: 4px -5px;
 }
 
 .divider>span::after,
@@ -396,17 +410,31 @@ canvas {
 }
 
 
-.save_button {
-  margin-top: 8px;
+.save_button,
+.calc_button {
+  margin-top: 16px;
   color: #fff;
   padding: 8px 15px;
-  background-color: rgb(69, 142, 243);
   border: none;
   border-radius: 40px;
   cursor: pointer;
 }
 
+.save_button {
+  background-color: rgb(69, 142, 243);
+}
+
 .save_button:hover {
   background-color: rgba(69, 142, 243, 0.774);
+}
+
+.calc_button {
+  background-color: rgb(243, 139, 69);
+  margin-left: 12px;
+}
+
+.calc_button:hover {
+  background-color: rgba(243, 139, 69, 0.774);
+
 }
 </style>

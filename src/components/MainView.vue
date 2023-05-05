@@ -75,7 +75,7 @@
           <button class="save_button" @click="saveSVG">
             Скачать SVG
           </button>
-          <button class="calc_button" @click="setSVG">
+          <button class="calc_button" @click="setSVG(true)">
             Рассчитать SVG
           </button>
         </div>
@@ -111,7 +111,8 @@ export default {
       file: null,
       imageUrl: null,
       imageLink: null,
-      fragmentSize: 16,
+      fragmentSize: 10,
+      lastSize: null,
       pathSize: 80,
       pathWidth: 1,
       bright: 100,
@@ -121,7 +122,9 @@ export default {
       symbols: [],
       context: null,
       canCalculate: false,
-      isLive: true
+      isLive: true,
+      maxCanvasSize: 500,
+      imageBrightnessAll: []
     }
   },
   computed: {
@@ -133,8 +136,8 @@ export default {
     },
     settings() {
       return {
-        fragmentSize: this.fragmentSize,
-        pathSize: this.pathSize,
+        // fragmentSize: this.fragmentSize,
+        // pathSize: this.pathSize,
         bright: this.bright,
         shadow: this.shadow,
       }
@@ -195,13 +198,26 @@ export default {
     drawImage(file) {
       const img = new Image()
       img.onload = () => {
-        this.$refs.canvas.width = this.imageWidth = img.width
-        this.$refs.canvas.height = this.imageHeight = img.height
-        this.context.drawImage(img, 0, 0)
+        let size = this.maxCanvasSize
+        let ratio = img.width / img.height;
+        [
+          this.$refs.canvas.width,
+          this.$refs.canvas.height
+        ] = [
+          this.imageWidth,
+          this.imageHeight
+        ] = (ratio >= 1) ? [size, size / ratio] : [size * ratio, size]
+        let scale = this.$refs.canvas.width / img.width
+        // this.$refs.canvas.width = this.imageWidth = img.width
+        // this.$refs.canvas.height = this.imageHeight = img.height
+        this.context.drawImage(img, 0, 0, img.width * scale, img.height * scale)
+
+        this.$refs.svg.setAttribute('width', this.$refs.canvas.width)
+        this.$refs.svg.setAttribute('height', this.$refs.canvas.height)
+        if (!this.isLive) return
+        this.setSVG(true)
       };
       img.src = URL.createObjectURL(file)
-      if (!this.isLive) return
-      this.setSVG()
     },
     saveSVG() {
       const svg = this.$refs.svg
@@ -215,53 +231,89 @@ export default {
       downloadLink.click()
       document.body.removeChild(downloadLink)
     },
-    async setSVG() {
+    calcMedian(arr) {
+      let median = 0
+      let len = arr.length
+      arr.sort()
+      if (len % 2 === 0) {
+        median = (arr[len / 2 - 1] + arr[len / 2]) / 2
+      } else {
+        median = arr[(len - 1) / 2]
+      }
+      return median
+    },
+    async setSVG(isRequired) {
       this.canCalculate = false
-      let a = new Date()
-      let symbols = []
-      const svg = this.$refs.svg
+      if (!isRequired) return this.setSymbols(this.imageBrightnessAll)
+      this.imageBrightnessAll = []
       const canvas = this.$refs.canvas
       const size = this.fragmentSize
 
       const rows = Math.ceil(canvas.height / size)
       const cols = Math.ceil(canvas.width / size)
+      // console.log(rows, cols);
 
-      svg.setAttribute('width', canvas.width)
-      svg.setAttribute('height', canvas.height)
       for (let i = 0; i < rows; i++) {
         for (let j = 0; j < cols; j++) {
           const x = j * size
           const y = i * size
           const imageData = this.context.getImageData(x, y, size, size)
-
-          let blackPixels = 0
-          let greyPixels = 0
-          let whitePixels = 0
+          // let blackPixels = 0
+          // let greyPixels = 0
+          // let whitePixels = 0
+          let brightnessAll = []
           for (let k = 0; k < imageData.data.length; k += 4) {
             const r = imageData.data[k]
             const g = imageData.data[k + 1]
             const b = imageData.data[k + 2]
             const brightness = (r * 0.2126) + (g * 0.7152) + (b * 0.0722)
-            if (brightness <= this.shadow) {
-              blackPixels++
-            } else if (brightness > this.shadow && brightness <= this.bright) {
-              greyPixels++
-            } else {
-              whitePixels++
-            }
+            brightnessAll.push(brightness)
+            // if (brightness <= this.shadow) {
+            //   blackPixels++
+            // } else if (brightness > this.shadow && brightness <= this.bright) {
+            //   greyPixels++
+            // } else {
+            //   whitePixels++
+            // }
           }
-          if (blackPixels > whitePixels && blackPixels > greyPixels) {
+          // if (blackPixels > whitePixels && blackPixels > greyPixels) {
+          //   symbols.push({})
+          // } else if (greyPixels > whitePixels) {
+          //   symbols.push(this.getPath({ x, y }, 'minus'))
+          // } else {
+          //   symbols.push(this.getPath({ x, y }, 'plus'))
+          // }
+          if (!this.imageBrightnessAll[i]) this.imageBrightnessAll[i] = []
+          this.imageBrightnessAll[i][j] = {
+            x, y, bright: this.calcMedian(brightnessAll)
+          }
+        }
+      }
+      // this.setSymbols(imgBrtnssAll, symbols)
+      // this.symbols = symbols
+      // this.canCalculate = true
+      // console.log(new Date() - a);
+      this.setSymbols(this.imageBrightnessAll)
+    },
+    setSymbols(arr) {
+      let symbols = []
+      const setPaths = (arr) => {
+        if (!Array.isArray(arr)) {
+          let { bright, x, y } = arr
+          if (bright <= this.shadow) {
             symbols.push({})
-          } else if (greyPixels > whitePixels) {
+          } else if (bright > this.shadow && bright <= this.bright) {
             symbols.push(this.getPath({ x, y }, 'minus'))
           } else {
             symbols.push(this.getPath({ x, y }, 'plus'))
           }
+          return
         }
+        arr.forEach(item => setPaths(item))
       }
+      setPaths(arr)
       this.symbols = symbols
       this.canCalculate = true
-      console.log(new Date() - a);
     },
   },
   watch: {
@@ -292,15 +344,18 @@ export default {
       },
       deep: true
     },
+    fragmentSize: {
+      async handler(nv) {
+        if (this.canCalculate && this.isLive) this.setSVG(true)
+      },
+      deep: true
+    },
     settings: {
       async handler(nv) {
         if (this.canCalculate && this.isLive) this.setSVG()
       },
       deep: true
     },
-    async canCalculate(nv) {
-      if (nv && this.isLive) this.setSVG()
-    }
   },
   mounted() {
     this.context = this.$refs.canvas.getContext('2d', { willReadFrequently: true })
@@ -312,18 +367,16 @@ export default {
 <style scoped>
 canvas {
   position: absolute;
-  left: 2000vw;
+  transform: translateX(-2000vw);
 }
 
 .container {
   display: flex;
-  flex-wrap: wrap;
   gap: 24px;
 }
 
 .images {
   display: flex;
-  flex-direction: column;
   gap: 24px;
 }
 
@@ -366,12 +419,12 @@ canvas {
 }
 
 .before .img_container {
-  width: 300px
+  width: 200px
 }
 
 .after .img_container {
-  width: max-content;
-  max-width: 50vw;
+  width: 50vw;
+  max-width: 700px;
   max-height: 90vh;
 }
 
@@ -379,18 +432,39 @@ canvas {
   background-color: black;
   width: 100%;
   height: min-content;
-  max-height: 90vh;
+  max-height: 85vh;
+}
+
+@media (max-width: 1200px) {
+  .images {
+    flex-direction: column;
+  }
+
+  .after .img_container {
+    width: 65vw;
+    max-width: none;
+  }
 }
 
 @media (max-width: 992px) {
+
   .after .img_container {
-    width: 100%;
+    width: 55vw;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    flex-direction: column;
   }
 
-  .svg {
-    width: 300px;
-    height: auto;
-    max-height: 90vh;
+  .after .img_container {
+    width: calc(95vw - 30px);
+  }
+
+  .after,
+  .before {
+    margin: 0;
   }
 }
 
@@ -405,7 +479,7 @@ canvas {
 }
 
 .alt {
-  height: 300px;
+  height: 200px;
   background-color: rgb(214, 214, 214);
 }
 

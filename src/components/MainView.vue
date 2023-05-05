@@ -29,8 +29,8 @@
         <div class="form-item">
           <label for="fragmentSize">Размер ячейки</label>
           <div class="input_container">
-            <input type="range" min="3" max="100" v-model="fragmentSize" />
-            <input type="number" id="fragmentSize" min="3" max="100" v-model="fragmentSize" />
+            <input type="range" min="4" max="100" v-model="fragmentSize" />
+            <input type="number" id="fragmentSize" min="4" max="100" v-model="fragmentSize" />
             <span>px</span>
           </div>
         </div>
@@ -143,7 +143,7 @@ export default {
       }
     },
     fragmentSizeComp() {
-      return Math.max(this.fragmentSize, 3)
+      return Math.max(this.fragmentSize, 4)
     },
     minBright() {
       return Math.max(+this.shadow + 1, 2)

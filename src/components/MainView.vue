@@ -29,8 +29,8 @@
         <div class="form-item">
           <label for="fragmentSize">Размер ячейки</label>
           <div class="input_container">
-            <input type="range" min="1" max="100" v-model="fragmentSize" />
-            <input type="number" id="fragmentSize" min="1" max="100" v-model="fragmentSize" />
+            <input type="range" min="3" max="100" v-model="fragmentSize" />
+            <input type="number" id="fragmentSize" min="3" max="100" v-model="fragmentSize" />
             <span>px</span>
           </div>
         </div>
@@ -75,7 +75,7 @@
           <button class="save_button" @click="saveSVG">
             Скачать SVG
           </button>
-          <button class="calc_button" @click="setSVG(true)">
+          <button v-if="!isLive" class="calc_button" @click="setSVG(true)">
             Рассчитать SVG
           </button>
         </div>
@@ -142,6 +142,9 @@ export default {
         shadow: this.shadow,
       }
     },
+    fragmentSizeComp() {
+      return Math.max(this.fragmentSize, 3)
+    },
     minBright() {
       return Math.max(+this.shadow + 1, 2)
     },
@@ -158,7 +161,7 @@ export default {
       this.file = null
     },
     getPath({ x, y }, name) {
-      const step = this.fragmentSize
+      const step = this.fragmentSizeComp
       const size = step / 100 * this.pathSize
       const gap = (step - size) / 2
 
@@ -247,7 +250,7 @@ export default {
       if (!isRequired) return this.setSymbols(this.imageBrightnessAll)
       this.imageBrightnessAll = []
       const canvas = this.$refs.canvas
-      const size = this.fragmentSize
+      const size = this.fragmentSizeComp
 
       const rows = Math.ceil(canvas.height / size)
       const cols = Math.ceil(canvas.width / size)

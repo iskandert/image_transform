@@ -137,7 +137,7 @@ export default {
     settings() {
       return {
         // fragmentSize: this.fragmentSize,
-        // pathSize: this.pathSize,
+        pathSize: this.pathSize,
         bright: this.bright,
         shadow: this.shadow,
       }

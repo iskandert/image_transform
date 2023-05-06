@@ -9,13 +9,13 @@
           <label for="file">Загрузить с устройства:</label>
           <input type="file" id="file" @change="previewImage" />
         </div>
-        <div class="divider">
+        <!-- <div class="divider">
           <span>или</span>
         </div>
         <div class="form-item">
           <label for="link">Открыть по ссылке:</label>
           <input type="text" id="link" v-model="imageLink" />
-        </div>
+        </div> -->
         <div class="divider">
           <span>или</span>
         </div>
@@ -124,7 +124,9 @@ export default {
       canCalculate: false,
       isLive: true,
       maxCanvasSize: 500,
-      imageBrightnessAll: []
+      imageBrightnessAll: [],
+      minFrBrtnss: [],
+      isNewFile: true
     }
   },
   computed: {
@@ -217,6 +219,8 @@ export default {
 
         this.$refs.svg.setAttribute('width', this.$refs.canvas.width)
         this.$refs.svg.setAttribute('height', this.$refs.canvas.height)
+        this.isNewFile = true
+        this.getBrightnessAll()
         if (!this.isLive) return
         this.setSVG(true)
       };
@@ -245,25 +249,19 @@ export default {
       }
       return median
     },
-    async setSVG(isRequired) {
+    getBrightnessAll() {
       this.canCalculate = false
-      if (!isRequired) return this.setSymbols(this.imageBrightnessAll)
-      this.imageBrightnessAll = []
       const canvas = this.$refs.canvas
-      const size = this.fragmentSizeComp
+      const size = 4
 
       const rows = Math.ceil(canvas.height / size)
       const cols = Math.ceil(canvas.width / size)
-      // console.log(rows, cols);
 
       for (let i = 0; i < rows; i++) {
         for (let j = 0; j < cols; j++) {
           const x = j * size
           const y = i * size
           const imageData = this.context.getImageData(x, y, size, size)
-          // let blackPixels = 0
-          // let greyPixels = 0
-          // let whitePixels = 0
           let brightnessAll = []
           for (let k = 0; k < imageData.data.length; k += 4) {
             const r = imageData.data[k]
@@ -271,60 +269,98 @@ export default {
             const b = imageData.data[k + 2]
             const brightness = (r * 0.2126) + (g * 0.7152) + (b * 0.0722)
             brightnessAll.push(brightness)
-            // if (brightness <= this.shadow) {
-            //   blackPixels++
-            // } else if (brightness > this.shadow && brightness <= this.bright) {
-            //   greyPixels++
-            // } else {
-            //   whitePixels++
-            // }
           }
-          // if (blackPixels > whitePixels && blackPixels > greyPixels) {
-          //   symbols.push({})
-          // } else if (greyPixels > whitePixels) {
-          //   symbols.push(this.getPath({ x, y }, 'minus'))
-          // } else {
-          //   symbols.push(this.getPath({ x, y }, 'plus'))
-          // }
-          if (!this.imageBrightnessAll[i]) this.imageBrightnessAll[i] = []
-          this.imageBrightnessAll[i][j] = {
-            x, y, bright: this.calcMedian(brightnessAll)
-          }
+          if (!this.minFrBrtnss[i]) this.minFrBrtnss[i] = []
+          this.minFrBrtnss[i][j] = this.calcMedian(brightnessAll)
         }
       }
-      // this.setSymbols(imgBrtnssAll, symbols)
-      // this.symbols = symbols
-      // this.canCalculate = true
-      // console.log(new Date() - a);
-      this.setSymbols(this.imageBrightnessAll)
     },
-    setSymbols(arr) {
-      let symbols = []
-      const setPaths = (arr) => {
-        if (!Array.isArray(arr)) {
-          let { bright, x, y } = arr
-          if (bright <= this.shadow) {
-            symbols.push({})
-          } else if (bright > this.shadow && bright <= this.bright) {
-            symbols.push(this.getPath({ x, y }, 'minus'))
-          } else {
-            symbols.push(this.getPath({ x, y }, 'plus'))
+    bilinearInterpolation(matrix, newWidth, newHeight) {
+      const oldWidth = matrix[0].length;
+      const oldHeight = matrix.length;
+
+      const newMatrix = new Array(newHeight);
+      for (let i = 0; i < newHeight; i++) {
+        newMatrix[i] = new Array(newWidth);
+        for (let j = 0; j < newWidth; j++) {
+          let x = j * (oldWidth - 1) / (newWidth - 1);
+          let y = i * (oldHeight - 1) / (newHeight - 1);
+
+          let x1 = Math.floor(x);
+          let x2 = Math.ceil(x);
+          let y1 = Math.floor(y);
+          let y2 = Math.ceil(y);
+
+          if (x1 === x2) {
+            x1 = Math.max(x - 1, 0)
+            x2 = Math.min(x + 1, oldWidth - 1)
+            x = Math.round((x1 + x2) / 2)
           }
-          return
+
+          if (y1 === y2) {
+            y1 = Math.max(y - 1, 0)
+            y2 = Math.min(y + 1, oldHeight - 1)
+            y = Math.round((y1 + y2) / 2)
+          }
+
+          let a = (x2 - x) / (x2 - x1) * matrix[y1][x1] + (x - x1) / (x2 - x1) * matrix[y1][x2];
+          let b = (x2 - x) / (x2 - x1) * matrix[y2][x1] + (x - x1) / (x2 - x1) * matrix[y2][x2];
+
+          newMatrix[i][j] = (y2 - y) / (y2 - y1) * a + (y - y1) / (y2 - y1) * b;
         }
-        arr.forEach(item => setPaths(item))
       }
-      setPaths(arr)
-      this.symbols = symbols
+
+      return newMatrix;
+    },
+    async setSVG(isRequired) {
+      if (this.fragmentSizeComp === 4 && !this.isNewFile) return this.setSymbols(this.minFrBrtnss)
+      if (!isRequired && !this.isNewFile) return this.setSymbols(this.imageBrightnessAll)
+
+      this.canCalculate = false
+      this.imageBrightnessAll = []
+      const canvas = this.$refs.canvas
+      const size = this.fragmentSizeComp
+      const rows = Math.ceil(canvas.height / size)
+      const cols = Math.ceil(canvas.width / size)
+
+      this.imageBrightnessAll = this.bilinearInterpolation(this.minFrBrtnss, cols, rows)
+      this.setSymbols(this.imageBrightnessAll)
+      this.isNewFile = false
       this.canCalculate = true
     },
+    setPath(bright, x, y, symbols) {
+      if (bright <= this.shadow) {
+        symbols.push({})
+      } else if (bright > this.shadow && bright <= this.bright) {
+        symbols.push(this.getPath({ x, y }, 'minus'))
+      } else {
+        symbols.push(this.getPath({ x, y }, 'plus'))
+      }
+    },
+    setSymbols(newBrtnss) {
+      let symbols = []
+      newBrtnss.forEach((row, y) => row.forEach((fr, x) => {
+        this.setPath(fr, x * this.fragmentSizeComp, y * this.fragmentSizeComp, symbols)
+      }))
+      this.symbols = symbols
+    },
+    reset() {
+      this.file = null
+      this.imageUrl = null
+      this.imageLink = null
+      this.imageWidth = null
+      this.imageHeight = null
+      this.imageBrightnessAll = []
+      this.minFrBrtnss = []
+      this.isNewFile = true
+      this.symbols = []
+    }
   },
   watch: {
     file: {
       handler(nv) {
         if (nv) {
-          this.imageLink = null
-          this.symbols = []
+          this.reset()
           const reader = new FileReader()
           reader.onload = e => {
             this.imageUrl = e.target.result
@@ -332,6 +368,7 @@ export default {
           reader.readAsDataURL(nv)
           return this.drawImage(nv)
         }
+        this.reset()
         this.imageUrl = null
         this.symbols = []
       },
